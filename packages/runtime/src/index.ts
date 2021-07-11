@@ -56,6 +56,7 @@ import {
   stringMap,
   syncEnvVars,
   validateEntrypoint,
+  NextServerVersion,
 } from './utils';
 const {
   createLambda,
@@ -89,7 +90,7 @@ export const version = 2;
 const htmlContentType = 'text/html; charset=utf-8';
 const nowDevChildProcesses = new Set<ChildProcess>();
 
-['SIGINT', 'SIGTERM'].forEach(signal => {
+['SIGINT', 'SIGTERM'].forEach((signal) => {
   process.once(signal as NodeJS.Signals, () => {
     for (const child of nowDevChildProcesses) {
       debug(
@@ -193,6 +194,18 @@ function isLegacyNext(nextVersion: string) {
   return true;
 }
 
+function isNextServerVersion(nextVersion: string | false) {
+  if (nextVersion === 'canary' || nextVersion === 'latest') {
+    return true;
+  }
+
+  if (nextVersion && semver.gte(nextVersion, NextServerVersion)) {
+    return true;
+  }
+
+  return false;
+}
+
 const name = '[@vercel/next]';
 const urls: stringMap = {};
 
@@ -249,6 +262,9 @@ export async function build({
   const nextVersionRange = await getNextVersionRange(entryPath);
   const nodeVersion = await getNodeVersion(entryPath, undefined, config, meta);
   const spawnOpts = getSpawnOptions(meta, nodeVersion);
+  const nextTarget = isNextServerVersion(nextVersionRange)
+    ? 'server'
+    : 'experimental-serverless-trace';
 
   // Add Vercel build environment variables that some dependencies need
   // to determine a Vercel like build environment
@@ -261,7 +277,7 @@ export async function build({
     // This is an opt-out of this behavior until we support it.
     // https://github.com/dealmore/terraform-aws-next-js/issues/86
     // https://github.com/vercel/next.js/pull/22731
-    NEXT_PRIVATE_TARGET: 'experimental-serverless-trace',
+    NEXT_PRIVATE_TARGET: nextTarget,
     // We override init CWD here with the entrypoint to ensure that applications
     // can get the CWD from the download directory root
     INIT_CWD: entryPath,
@@ -346,7 +362,15 @@ export async function build({
   }
 
   const isLegacy = nextVersionRange && isLegacyNext(nextVersionRange);
-  debug(`MODE: ${isLegacy ? 'legacy' : 'serverless'}`);
+  debug(
+    `MODE: ${
+      isLegacy
+        ? 'legacy'
+        : nextTarget === 'server'
+        ? 'server(less)'
+        : 'serverless'
+    }`
+  );
 
   if (isLegacy) {
     console.warn(
@@ -430,8 +454,14 @@ export async function build({
     });
   }
 
+  if (nextTarget === 'server') {
+    debug(
+      `Application is being built in server mode since ${nextVersion} meets minimum version of v${NextServerVersion}`
+    );
+  }
+
   if (!isLegacy) {
-    await createServerlessConfig(workPath, entryPath, nextVersion);
+    await createServerlessConfig(workPath, entryPath, nextVersion, nextTarget);
   }
 
   const memoryToConsume = Math.floor(os.totalmem() / 1024 ** 2) - 128;
@@ -571,7 +601,7 @@ export async function build({
                 `${(ssgDataRoute && ssgDataRoute.dataRoute) || dataRoute.page}${
                   dataRoute.routeKeys
                     ? `?${Object.keys(dataRoute.routeKeys)
-                        .map(key => `${dataRoute.routeKeys![key]}=$${key}`)
+                        .map((key) => `${dataRoute.routeKeys![key]}=$${key}`)
                         .join('&')}`
                     : ''
                 }`
@@ -590,7 +620,7 @@ export async function build({
                 `/${escapedBuildId}/(?${
                   ssgDataRoute ? '<nextLocale>' : ':'
                 }${i18n.locales
-                  .map(locale => escapeStringRegexp(locale))
+                  .map((locale) => escapeStringRegexp(locale))
                   .join('|')})/`
               );
 
@@ -604,7 +634,7 @@ export async function build({
                   `/${escapedBuildId}/(?${
                     ssgDataRoute ? '<nextLocale>' : ':'
                   }${i18n.locales
-                    .map(locale => escapeStringRegexp(locale))
+                    .map((locale) => escapeStringRegexp(locale))
                     .join('|')})[/]?`
                 );
               }
@@ -847,7 +877,7 @@ export async function build({
     );
     const nodeModules = excludeFiles(
       await glob('node_modules/**', entryPath),
-      file => file.startsWith('node_modules/.cache')
+      (file) => file.startsWith('node_modules/.cache')
     );
     const launcherFiles = {
       'now__bridge.js': new FileFsRef({
@@ -876,7 +906,7 @@ export async function build({
     const launcherData = await readFile(launcherPath, 'utf8');
 
     await Promise.all(
-      Object.keys(pages).map(async page => {
+      Object.keys(pages).map(async (page) => {
         // These default pages don't have to be handled as they'd always 404
         if (['_app.js', '_error.js', '_document.js'].includes(page)) {
           return;
@@ -928,7 +958,7 @@ export async function build({
         debug(`Created serverless function for page: "${page}"`);
       })
     );
-  } else {
+  } else if (nextTarget === 'experimental-serverless-trace') {
     debug('Preparing serverless function files...');
     const pagesDir = path.join(
       entryPath,
@@ -1036,7 +1066,7 @@ export async function build({
     const isApiPage = (page: string) =>
       page.replace(/\\/g, '/').match(/serverless\/pages\/api(\/|\.js$)/);
 
-    const canUsePreviewMode = Object.keys(pages).some(page =>
+    const canUsePreviewMode = Object.keys(pages).some((page) =>
       isApiPage(pages[page].fsPath)
     );
 
@@ -1068,7 +1098,7 @@ export async function build({
       }
     };
 
-    Object.keys(prerenderManifest.staticRoutes).forEach(route =>
+    Object.keys(prerenderManifest.staticRoutes).forEach((route) =>
       onPrerenderRouteInitial(route)
     );
 
@@ -1208,7 +1238,7 @@ export async function build({
         debug(
           'detected (legacy) assets to be bundled with serverless function:'
         );
-        assetKeys.forEach(assetFile => debug(`\t${assetFile}`));
+        assetKeys.forEach((assetFile) => debug(`\t${assetFile}`));
         debug(
           '\nPlease upgrade to Next.js 9.1 to leverage modern asset handling.'
         );
@@ -1334,7 +1364,7 @@ export async function build({
         if (i18n) {
           addPageLambdaRoute(
             `[/]?(?:${i18n.locales
-              .map(locale => escapeStringRegexp(locale))
+              .map((locale) => escapeStringRegexp(locale))
               .join('|')})?${escapeStringRegexp(outputName)}`
           );
         } else {
@@ -1368,7 +1398,7 @@ export async function build({
       }
     } else {
       await Promise.all(
-        pageKeys.map(async page => {
+        pageKeys.map(async (page) => {
           // These default pages don't have to be handled as they'd always 404
           if (['_app.js', '_document.js'].includes(page)) {
             return;
@@ -1465,8 +1495,8 @@ export async function build({
       false,
       routesManifest,
       new Set(prerenderManifest.omittedRoutes)
-    ).then(arr =>
-      arr.map(route => {
+    ).then((arr) =>
+      arr.map((route) => {
         const { i18n } = routesManifest || {};
 
         if (i18n) {
@@ -1486,7 +1516,7 @@ export async function build({
             `^${dynamicPrefix ? `${dynamicPrefix}[/]?` : '[/]?'}(?${
               isLocalePrefixed ? '<nextLocale>' : ':'
             }${i18n.locales
-              .map(locale => escapeStringRegexp(locale))
+              .map((locale) => escapeStringRegexp(locale))
               .join('|')})?`
           );
 
@@ -1517,8 +1547,8 @@ export async function build({
         dynamicPages,
         false,
         routesManifest
-      ).then(arr =>
-        arr.map(route => {
+      ).then((arr) =>
+        arr.map((route) => {
           route.src = route.src.replace('^', `^${dynamicPrefix}`);
           return route;
         })
@@ -1563,7 +1593,7 @@ export async function build({
                   const pages = {
                     ${groupPageKeys
                       .map(
-                        page =>
+                        (page) =>
                           `'${page}': () => require('./${path.join(
                             './',
                             group.pages[page].pageFileName
@@ -1609,7 +1639,7 @@ export async function build({
                       // for prerendered dynamic routes (/blog/post-1) we need to
                       // find the match since it won't match the page directly
                       const dynamicRoutes = ${JSON.stringify(
-                        completeDynamicRoutes.map(route => ({
+                        completeDynamicRoutes.map((route) => ({
                           src: route.src,
                           dest: route.dest,
                         }))
@@ -1936,13 +1966,13 @@ export async function build({
       }
     };
 
-    Object.keys(prerenderManifest.staticRoutes).forEach(route =>
+    Object.keys(prerenderManifest.staticRoutes).forEach((route) =>
       onPrerenderRoute(route, { isBlocking: false, isFallback: false })
     );
-    Object.keys(prerenderManifest.fallbackRoutes).forEach(route =>
+    Object.keys(prerenderManifest.fallbackRoutes).forEach((route) =>
       onPrerenderRoute(route, { isBlocking: false, isFallback: true })
     );
-    Object.keys(prerenderManifest.blockingFallbackRoutes).forEach(route =>
+    Object.keys(prerenderManifest.blockingFallbackRoutes).forEach((route) =>
       onPrerenderRoute(route, { isBlocking: true, isFallback: false })
     );
 
@@ -1966,6 +1996,62 @@ export async function build({
         });
       });
     }
+  } else {
+    // Use `server` target
+    const pagesDir = path.join(entryPath, outputDirectory, 'server', 'pages');
+
+    const pages = await glob('**/*.js', pagesDir);
+    const staticPageFiles = await glob('**/*.html', pagesDir);
+
+    Object.keys(staticPageFiles).forEach((page: string) => {
+      const pathname = page.replace(/\.html$/, '');
+      const routeName = normalizeLocalePath(
+        normalizePage(pathname),
+        routesManifest?.i18n?.locales
+      ).pathname;
+
+      // Prerendered routes emit a `.html` file but should not be treated as a
+      // static page.
+      // Lazily prerendered routes have a fallback `.html` file on newer
+      // Next.js versions so we need to also not treat it as a static page here.
+      if (
+        prerenderManifest.staticRoutes[routeName] ||
+        prerenderManifest.fallbackRoutes[routeName] ||
+        prerenderManifest.staticRoutes[normalizePage(pathname)] ||
+        prerenderManifest.fallbackRoutes[normalizePage(pathname)]
+      ) {
+        return;
+      }
+
+      const staticRoute = path.join(entryDirectory, pathname);
+
+      staticPages[staticRoute] = staticPageFiles[page];
+      staticPages[staticRoute].contentType = htmlContentType;
+
+      if (isDynamicRoute(pathname)) {
+        dynamicPages.push(routeName);
+        return;
+      }
+    });
+
+    // this can be 404.html in latest versions
+    static404Page =
+      staticPages[path.join(entryDirectory, '404')] && hasPages404
+        ? path.join(entryDirectory, '404')
+        : undefined;
+
+    // TODO: locale specific 404s
+    const { i18n } = routesManifest || {};
+
+    if (!static404Page && i18n) {
+      static404Page = staticPages[
+        path.join(entryDirectory, i18n.defaultLocale, '404')
+      ]
+        ? path.join(entryDirectory, i18n.defaultLocale, '404')
+        : undefined;
+    }
+
+
   }
 
   const nextStaticFiles = await glob(
@@ -2021,7 +2107,7 @@ export async function build({
     // We need to delete lambdas from output instead of omitting them from the
     // start since we rely on them for powering Preview Mode (read above in
     // onPrerenderRoute).
-    prerenderManifest.omittedRoutes.forEach(routeKey => {
+    prerenderManifest.omittedRoutes.forEach((routeKey) => {
       // Get the route file as it'd be mounted in the builder output
       const routeFileNoExt = path.posix.join(
         entryDirectory,
@@ -2081,7 +2167,7 @@ export async function build({
 
   const trailingSlashRedirects: Route[] = [];
 
-  redirects = redirects.filter(_redir => {
+  redirects = redirects.filter((_redir) => {
     const redir = _redir as Source;
     // detect the trailing slash redirect and make sure it's
     // kept above the wildcard mapping to prevent erroneous redirects
@@ -2113,7 +2199,7 @@ export async function build({
       ...staticDirectoryFiles,
     },
     wildcard: i18n?.domains
-      ? i18n?.domains.map(item => {
+      ? i18n?.domains.map((item) => {
           return {
             domain: item.domain,
             value:
@@ -2156,7 +2242,7 @@ export async function build({
                 entryDirectory,
                 '/'
               )}(?!(?:_next/.*|${i18n.locales
-                .map(locale => escapeStringRegexp(locale))
+                .map((locale) => escapeStringRegexp(locale))
                 .join('|')})(?:/.*|$))(.*)$`,
               // we aren't able to ensure trailing slash mode here
               // so ensure this comes after the trailing slash redirect
@@ -2172,7 +2258,7 @@ export async function build({
                       '/',
                       entryDirectory
                     )}/?(?:${i18n.locales
-                      .map(locale => escapeStringRegexp(locale))
+                      .map((locale) => escapeStringRegexp(locale))
                       .join('|')})?/?$`,
                     locale: {
                       redirect: i18n.domains.reduce(
@@ -2182,7 +2268,7 @@ export async function build({
                           }://${item.domain}/`;
 
                           if (item.locales) {
-                            item.locales.map(locale => {
+                            item.locales.map((locale) => {
                               prev[locale] = `http${item.http ? '' : 's'}://${
                                 item.domain
                               }/${locale}`;
@@ -2241,7 +2327,7 @@ export async function build({
                 entryDirectory,
                 '/'
               )}(?!(?:_next/.*|${i18n.locales
-                .map(locale => escapeStringRegexp(locale))
+                .map((locale) => escapeStringRegexp(locale))
                 .join('|')})(?:/.*|$))(.*)$`,
               dest: `/${i18n.defaultLocale}/$1`,
               continue: true,
@@ -2264,7 +2350,7 @@ export async function build({
                 entryDirectory,
                 '/'
               )}(?:${i18n.locales
-                .map(locale => escapeStringRegexp(locale))
+                .map((locale) => escapeStringRegexp(locale))
                 .join('|')})?[/]?404`,
               status: 404,
               continue: true,
@@ -2283,7 +2369,7 @@ export async function build({
       { handle: 'filesystem' },
 
       // map pages to their lambda
-      ...pageLambdaRoutes.filter(route => {
+      ...pageLambdaRoutes.filter((route) => {
         // filter out any SSG pages as they are already present in output
         if ('headers' in route) {
           let page = route.headers?.['x-nextjs-page']!;
@@ -2331,7 +2417,7 @@ export async function build({
                 '/',
                 entryDirectory
               )}/?(?:${i18n.locales
-                .map(locale => escapeStringRegexp(locale))
+                .map((locale) => escapeStringRegexp(locale))
                 .join('|')})/(.*)`,
               dest: `${path.join('/', entryDirectory, '/')}$1`,
               check: true,
@@ -2350,7 +2436,7 @@ export async function build({
                 entryDirectory,
                 '/'
               )}(?:${i18n?.locales
-                .map(locale => escapeStringRegexp(locale))
+                .map((locale) => escapeStringRegexp(locale))
                 .join('|')})/(.*)`,
               dest: '/$1',
               check: true,
@@ -2406,7 +2492,7 @@ export async function build({
                       entryDirectory,
                       '/'
                     )}(?<nextLocale>${i18n.locales
-                      .map(locale => escapeStringRegexp(locale))
+                      .map((locale) => escapeStringRegexp(locale))
                       .join('|')})(/.*|$)`,
                     dest: '/$nextLocale/404',
                     status: 404,

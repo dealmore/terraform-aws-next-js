@@ -43,13 +43,14 @@ function getDefaultData(target: string) {
 export default async function createServerlessConfig(
   workPath: string,
   entryPath: string,
-  nextVersion: string | undefined
+  nextVersion: string | undefined,
+  nextTarget: string
 ) {
   let target = 'serverless';
   if (nextVersion) {
     try {
       if (semver.gte(nextVersion, ExperimentalTraceVersion)) {
-        target = 'experimental-serverless-trace';
+        target = nextTarget;
       }
     } catch (
       _ignored

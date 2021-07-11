@@ -563,6 +563,7 @@ function syncEnvVars(base: EnvConfig, removeEnv: EnvConfig, addEnv: EnvConfig) {
 }
 
 export const ExperimentalTraceVersion = `9.0.4-canary.1`;
+export const NextServerVersion = '10.0.9-canary.4';
 
 export type PseudoLayer = {
   [fileName: string]: PseudoFile | PseudoSymbolicLink;

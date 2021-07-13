@@ -401,10 +401,10 @@
     exec-sh "^0.3.2"
     minimist "^1.2.0"
 
-"@dealmore/sammy@^1.6.1":
-  version "1.6.1"
-  resolved "https://registry.yarnpkg.com/@dealmore/sammy/-/sammy-1.6.1.tgz#b5340a838b6220bde3d3a137d57c7a82ddedf365"
-  integrity sha512-KPt+yIt/A9IJ/TT41GvI5D2v2IOlK+hZElB20a5dnQX0F43vvNp8fg4rPJEh4ZrtOyYB2g1+cO5ontdd+0lkIg==
+"@dealmore/sammy@^1.7.0":
+  version "1.7.0"
+  resolved "https://registry.yarnpkg.com/@dealmore/sammy/-/sammy-1.7.0.tgz#3687027837df0920221435d6d84eb48728c75030"
+  integrity sha512-C+LoAjeQkzMQst33aQ81rMVyKUjS6cVDxrf3HXZu5R6sQ43fgbxNRYmOLjRccpEdlU1cXDrwj5Q7RAT7aHEGvw==
   dependencies:
     aws-sdk "^2.804.0"
     change-case "^4.1.2"

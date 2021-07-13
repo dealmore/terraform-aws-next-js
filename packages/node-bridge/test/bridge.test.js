@@ -251,3 +251,53 @@ test('invalid request headers', async () => {
 
   server.close();
 });
+
+test('[APIGatewayProxyEvent] Replace Host header with X-Forwarded-Host', async () => {
+  const server = new Server((req, res) => {
+    const { query } = parseUrl(req.url, true);
+
+    res.end(
+      JSON.stringify({
+        method: req.method,
+        path: req.url,
+        query: query,
+        headers: req.headers,
+      })
+    );
+  });
+
+  const bridge = new Bridge(server);
+  bridge.listen();
+  const context = {};
+
+  const result = await bridge.launcher(
+    {
+      rawQueryString: '',
+      queryStringParameters: {},
+      rawPath: '/__NEXT_PAGE_LAMBDA_0/',
+      requestContext: {
+        http: {
+          method: 'GET',
+          path: '/__NEXT_PAGE_LAMBDA_0/',
+        },
+      },
+      headers: { 'x-forwarded-host': 'example.com' },
+      pathParameters: {
+        proxy: '',
+      },
+      body: null,
+    },
+    context
+  );
+
+  const body = JSON.parse(Buffer.from(result.body, 'base64').toString());
+  expect(body.method).toBe('GET');
+  expect(body.headers).toEqual(
+    expect.objectContaining({
+      host: 'example.com',
+    })
+  );
+  expect(body.headers['x-forwarded-host']).toBeUndefined();
+
+  server.close();
+});

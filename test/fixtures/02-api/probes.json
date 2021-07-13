@@ -12,6 +12,24 @@
       "path": "/api/actions/12345/info",
       "status": 200,
       "mustContain": "actionId: 12345"
+    },
+
+    // Headers
+    {
+      "path": "/api/host",
+      "requestHeaders": {
+        "host": "example.org"
+      },
+      "status": 200,
+      "mustContain": "host: example.org"
+    },
+    {
+      "path": "/api/viewer-header",
+      "requestHeaders": {
+        "x-tf-next-abc": "test123"
+      },
+      "status": 200,
+      "mustContain": "x-tf-next-abc: test123"
     }
   ]
 }

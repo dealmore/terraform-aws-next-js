@@ -128,6 +128,11 @@ export async function handler(event: CloudFrontRequestEvent) {
         custom: customOrigin,
       };
 
+      // Add X-Forwarded-Host header which contains the original header
+      if (request.headers['host']) {
+        headers['X-Forwarded-Host'] = request.headers['host'][0].value;
+      }
+
       // Modify `Host` header to match the external host
       headers.host = apiEndpoint;
 
@@ -143,6 +148,11 @@ export async function handler(event: CloudFrontRequestEvent) {
       request.origin = {
         custom: customOrigin,
       };
+
+      // Add X-Forwarded-Host header which contains the original header
+      if (request.headers['host']) {
+        headers['X-Forwarded-Host'] = request.headers['host'][0].value;
+      }
 
       // Modify `Host` header to match the external host
       headers.host = customOrigin.domainName;

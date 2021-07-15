@@ -112,7 +112,7 @@ export class Proxy {
             result = {
               found: true,
               target: 'filesystem',
-              dest: reqPathname,
+              dest: filePath,
               headers: combinedHeaders,
               continue: false,
               isDestUrl: false,
